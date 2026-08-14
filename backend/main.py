@@ -1,12 +1,19 @@
 """
-KelanaAI - Trip Summary Generator
-Sesi 1: Console App (Backend)
+KelanaAI - Trip Summary & Recommendation Engine
+Sesi 2: Presentation Layer (Console App)
 
-Fitur:
-- Menerima input interaktif dari pengguna (destinasi, negara, jumlah hari,
-  budget, mata uang, dan bulan perjalanan).
-- Menampilkan ringkasan perjalanan dalam format yang rapi menggunakan f-strings.
+Modul ini menangani interaksi pengguna (I/O):
+- Menerima input perjalanan dari pengguna
+- Memanggil logika bisnis dari services.trip_service
+- Menampilkan ringkasan & rekomendasi perjalanan menggunakan f-strings
 """
+
+from services.trip_service import (
+    get_trip_category,
+    get_travel_season,
+    calculate_daily_budget,
+    get_recommended_places,
+)
 
 
 def get_trip_input():
@@ -22,17 +29,27 @@ def get_trip_input():
 
 
 def print_trip_summary(destination, country, days, budget, currency, travel_month):
-    """Mencetak ringkasan perjalanan dengan format yang rapi dan terstruktur."""
-    print("\n========================")
+    """Mencetak ringkasan perjalanan lengkap dengan kategori, budget harian, musim, dan rekomendasi tempat."""
+    category = get_trip_category(budget)
+    season = get_travel_season(travel_month)
+    daily_budget = calculate_daily_budget(budget, days)
+    places = get_recommended_places(destination)
+
+    print("\n==================================")
     print("KelanaAI")
-    print("========================")
-    print(f"Destination : {destination}")
-    print(f"Country     : {country}")
-    print(f"Days        : {days}")
-    print(f"Budget      : {budget:.0f} {currency}")
-    print(f"Currency    : {currency}")
-    print(f"Travel Month: {travel_month}")
-    print("========================\n")
+    print("==================================")
+    print(f"Destination     : {destination}")
+    print(f"Days            : {days}")
+    print(f"Budget          : {budget:.0f} {currency}")
+    print(f"Category        : {category}")
+    print(f"Daily Budget    : {daily_budget:.0f} {currency}/Day")
+    print(f"Travel Month    : {travel_month}")
+    print(f"Season          : {season}")
+
+    print("\nRecommended Places")
+    for place in places:
+        print(f"- {place}")
+    print()
 
 
 def main():
