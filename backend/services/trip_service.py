@@ -63,3 +63,28 @@ def get_recommended_places(destination):
         recommended.append(place)
 
     return recommended
+
+
+# Daftar rekomendasi tempat wisata umum (dipakai endpoint /api/v1/recommendations)
+GENERAL_RECOMMENDATIONS = ["Tokyo Tower", "Mount Fuji", "Shibuya"]
+
+# Daftar pilihan moda transportasi (dipakai endpoint /api/v1/transportations)
+TRANSPORTATION_OPTIONS = ["Bus", "Train", "Flight"]
+
+
+def get_general_recommendations():
+    """Mengembalikan daftar rekomendasi tempat wisata secara umum."""
+    recommendations = []
+    for place in GENERAL_RECOMMENDATIONS:
+        recommendations.append(place)
+
+    return recommendations
+
+
+def get_transportation_options():
+    """Mengembalikan daftar pilihan moda transportasi yang tersedia."""
+    options = []
+    for option in TRANSPORTATION_OPTIONS:
+        options.append(option)
+
+    return options

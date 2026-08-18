@@ -12,10 +12,17 @@ tetap berada di services/trip_service.py dan digunakan kembali di sini
 tanpa diubah sedikit pun (separation of concerns).
 """
 
+from typing import List
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from services.trip_service import calculate_daily_budget, get_trip_category
+from services.trip_service import (
+    calculate_daily_budget,
+    get_trip_category,
+    get_general_recommendations,
+    get_transportation_options,
+)
 
 app = FastAPI(title="KelanaAI API")
 
@@ -55,3 +62,15 @@ def create_trip(trip: TripRequest):
         "daily_budget": daily_budget,
         "category": category,
     }
+
+
+@app.get("/api/v1/recommendations", response_model=List[str])
+def get_recommendations():
+    """Mengembalikan daftar rekomendasi tempat wisata (Python List -> JSON array)."""
+    return get_general_recommendations()
+
+
+@app.get("/api/v1/transportations", response_model=List[str])
+def get_transportations():
+    """Mengembalikan daftar pilihan moda transportasi (Python List -> JSON array)."""
+    return get_transportation_options()
