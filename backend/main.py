@@ -1,61 +1,57 @@
 """
-KelanaAI - Trip Summary & Recommendation Engine
-Sesi 2: Presentation Layer (Console App)
+KelanaAI - REST API
+Sesi 3: Teaching KelanaAI to Communicate (FastAPI)
 
-Modul ini menangani interaksi pengguna (I/O):
-- Menerima input perjalanan dari pengguna
-- Memanggil logika bisnis dari services.trip_service
-- Menampilkan ringkasan & rekomendasi perjalanan menggunakan f-strings
+Web layer (presentation layer) KelanaAI. Modul ini HANYA menangani:
+- Penerimaan HTTP request
+- Validasi data lewat Pydantic model
+- Pemberian HTTP/JSON response
+
+Seluruh logika bisnis (aturan kategori, kalkulasi anggaran harian, dsb.)
+tetap berada di services/trip_service.py dan digunakan kembali di sini
+tanpa diubah sedikit pun (separation of concerns).
 """
 
-from services.trip_service import (
-    get_trip_category,
-    get_travel_season,
-    calculate_daily_budget,
-    get_recommended_places,
-)
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from services.trip_service import calculate_daily_budget, get_trip_category
+
+app = FastAPI(title="KelanaAI API")
 
 
-def get_trip_input():
-    """Mengambil input perjalanan dari pengguna dan mengonversi tipe datanya."""
-    destination = input("Masukkan destinasi: ")
-    country = input("Masukkan negara: ")
-    days = int(input("Masukkan jumlah hari: "))
-    budget = float(input("Masukkan budget: "))
-    currency = input("Masukkan mata uang (contoh: USD): ")
-    travel_month = input("Masukkan bulan perjalanan: ")
-
-    return destination, country, days, budget, currency, travel_month
+class TripRequest(BaseModel):
+    destination: str
+    days: int
+    budget: float
 
 
-def print_trip_summary(destination, country, days, budget, currency, travel_month):
-    """Mencetak ringkasan perjalanan lengkap dengan kategori, budget harian, musim, dan rekomendasi tempat."""
-    category = get_trip_category(budget)
-    season = get_travel_season(travel_month)
-    daily_budget = calculate_daily_budget(budget, days)
-    places = get_recommended_places(destination)
-
-    print("\n==================================")
-    print("KelanaAI")
-    print("==================================")
-    print(f"Destination     : {destination}")
-    print(f"Days            : {days}")
-    print(f"Budget          : {budget:.0f} {currency}")
-    print(f"Category        : {category}")
-    print(f"Daily Budget    : {daily_budget:.0f} {currency}/Day")
-    print(f"Travel Month    : {travel_month}")
-    print(f"Season          : {season}")
-
-    print("\nRecommended Places")
-    for place in places:
-        print(f"- {place}")
-    print()
+@app.get("/")
+def read_root():
+    """Endpoint sambutan."""
+    return {"message": "Welcome to KelanaAI"}
 
 
-def main():
-    destination, country, days, budget, currency, travel_month = get_trip_input()
-    print_trip_summary(destination, country, days, budget, currency, travel_month)
+@app.get("/health")
+def health_check():
+    """Endpoint health check."""
+    return {"status": "OK"}
 
 
-if __name__ == "__main__":
-    main()
+@app.post("/api/v1/trips")
+def create_trip(trip: TripRequest):
+    """
+    Menerima detail perjalanan (destination, days, budget), lalu
+    menghitung anggaran harian dan kategori perjalanan menggunakan
+    fungsi dari services.trip_service.
+    """
+    daily_budget = calculate_daily_budget(trip.budget, trip.days)
+    category = get_trip_category(trip.budget)
+
+    return {
+        "destination": trip.destination,
+        "days": trip.days,
+        "budget": trip.budget,
+        "daily_budget": daily_budget,
+        "category": category,
+    }
