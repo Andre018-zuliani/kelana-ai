@@ -10,6 +10,7 @@ ringkasannya dalam format yang rapi.
 ```
 kelana-ai/
 ├── README.md
+├── requirements.txt
 ├── backend/
 │   ├── main.py
 │   └── services/
@@ -20,44 +21,56 @@ kelana-ai/
 ```
 
 Aplikasi menggunakan arsitektur berlapis (layered architecture):
-- **`main.py`** — presentation layer, menangani input/output pengguna.
+- **`main.py`** — web layer (REST API dengan FastAPI). Menerima HTTP
+  request, validasi lewat Pydantic, dan mengembalikan JSON response.
 - **`services/trip_service.py`** — business logic layer, berisi aturan
   penentuan kategori perjalanan, musim, kalkulasi anggaran harian, dan
-  rekomendasi tempat wisata.
+  rekomendasi tempat wisata. Tidak diubah sama sekali sejak Sesi 2 —
+  di-reuse langsung oleh web layer (separation of concerns).
 
-## Cara Menjalankan
+## Instalasi
+
+```bash
+pip install -r requirements.txt
+```
+
+## Cara Menjalankan (REST API)
 
 ```bash
 cd backend
-python3 main.py
+uvicorn main:app --reload
 ```
 
-Anda akan diminta memasukkan:
-- `destination` (String)
-- `country` (String)
-- `days` (Integer)
-- `budget` (Float)
-- `currency` (String)
-- `travel_month` (String)
+Buka dokumentasi interaktif Swagger UI di `http://localhost:8000/docs`.
 
-### Contoh Output
+### Endpoints
 
+| Method | Path | Deskripsi |
+|---|---|---|
+| GET | `/` | Pesan sambutan |
+| GET | `/health` | Health check |
+| POST | `/api/v1/trips` | Hitung kategori & anggaran harian perjalanan |
+
+### Contoh Request/Response
+
+**POST** `/api/v1/trips`
+```json
+{
+  "destination": "Japan",
+  "days": 5,
+  "budget": 2000
+}
 ```
-==================================
-KelanaAI
-==================================
-Destination     : Japan
-Days            : 5
-Budget          : 1500 USD
-Category        : Standard
-Daily Budget    : 300 USD/Day
-Travel Month    : December
-Season          : Peak Season
 
-Recommended Places
-- Tokyo Tower
-- Shibuya
-- Mount Fuji
+**Response (200 OK)**
+```json
+{
+  "destination": "Japan",
+  "days": 5,
+  "budget": 2000,
+  "daily_budget": 400.0,
+  "category": "Standard"
+}
 ```
 
 ### Aturan Bisnis
@@ -80,4 +93,5 @@ Recommended Places
 
 - [x] Sesi 1: Trip Summary Generator (console app)
 - [x] Sesi 2: Recommendation Engine (layered architecture)
-- [ ] Sesi 3: ...
+- [x] Sesi 3: REST API dengan FastAPI
+- [ ] Sesi 4: ...
