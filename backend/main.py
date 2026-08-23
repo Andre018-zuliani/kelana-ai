@@ -21,6 +21,7 @@ from pydantic import BaseModel
 
 from database import SessionLocal, init_db
 from models.trip import Trip
+from services.bedrock_service import generate_trip_recommendation
 from services.trip_service import (
     calculate_daily_budget,
     get_general_recommendations,
@@ -146,6 +147,39 @@ def delete_trip(trip_id: int):
     db.close()
 
     return {"message": f"Trip with id {trip_id} has been deleted"}
+
+
+@app.post("/api/v1/trips/{trip_id}/generate")
+def generate_ai_recommendation(trip_id: int):
+    """
+    Menghasilkan itinerary AI (via Amazon Bedrock) untuk trip yang sudah
+    ada, lalu menyimpan hasilnya ke kolom ai_recommendation di PostgreSQL.
+    404 jika trip tidak ditemukan.
+    """
+    db = SessionLocal()
+    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+
+    if trip is None:
+        db.close()
+        raise HTTPException(status_code=404, detail=f"Trip with id {trip_id} not found")
+
+    recommendation = generate_trip_recommendation(
+        destination=trip.destination,
+        days=trip.days,
+        budget=trip.budget,
+        category=trip.category,
+    )
+
+    trip.ai_recommendation = recommendation
+    db.commit()
+    db.refresh(trip)
+    db.close()
+
+    return {
+        "trip_id": trip.id,
+        "destination": trip.destination,
+        "recommendation": recommendation,
+    }
 
 
 @app.get("/api/v1/recommendations", response_model=List[str])

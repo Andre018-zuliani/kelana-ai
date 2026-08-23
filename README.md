@@ -20,7 +20,8 @@ kelana-ai/
 │   │   └── trip.py
 │   └── services/
 │       ├── __init__.py
-│       └── trip_service.py
+│       ├── trip_service.py
+│       └── bedrock_service.py
 └── frontend/
     └── .gitkeep
 ```
@@ -30,22 +31,27 @@ Arsitektur berlapis (layered architecture):
   request, validasi lewat Pydantic, dan mengembalikan JSON response.
 - **`database.py`** — persistence layer: koneksi PostgreSQL (engine,
   SessionLocal, Base) lewat SQLAlchemy.
-- **`models/trip.py`** — model ORM `Trip`, dipetakan ke tabel `trips`.
+- **`models/trip.py`** — model ORM `Trip`, dipetakan ke tabel `trips`,
+  termasuk kolom `ai_recommendation` untuk menyimpan hasil generate AI.
 - **`services/trip_service.py`** — business logic layer (aturan kategori,
-  musim, kalkulasi anggaran harian, rekomendasi). Tidak berubah sejak
-  Sesi 2 — di-reuse langsung oleh web layer.
+  musim, kalkulasi anggaran harian, rekomendasi statis).
+- **`services/bedrock_service.py`** — AI layer: membangun rich prompt dan
+  memanggil Amazon Bedrock (Converse API) untuk menghasilkan itinerary
+  personalisasi.
 
-## Instalasi & Setup Database
+## Instalasi & Setup
 
-1. Install PostgreSQL, lalu buat database bernama `kelana_ai`.
+1. Install PostgreSQL, buat database bernama `kelana_ai`.
 2. Install dependensi:
    ```bash
    pip install -r requirements.txt
    ```
-3. Salin `.env.example` menjadi `.env`, lalu sesuaikan `DATABASE_URL`
-   dengan kredensial PostgreSQL Anda:
+3. Salin `.env.example` menjadi `.env`, lalu isi:
    ```
    DATABASE_URL=postgresql+psycopg2://postgres:password@localhost:5432/kelana_ai
+   AWS_BEARER_TOKEN_BEDROCK=<API key dari instruktur>
+   AWS_REGION=ap-southeast-2
+   MODEL_ID=amazon.nova-lite-v1:0
    ```
    File `.env` sudah di-gitignore — jangan pernah commit kredensial asli.
 
@@ -56,8 +62,7 @@ cd backend
 uvicorn main:app --reload
 ```
 
-Tabel `trips` akan otomatis dibuat saat aplikasi start. Buka dokumentasi
-interaktif Swagger UI di `http://localhost:8000/docs`.
+Buka dokumentasi interaktif Swagger UI di `http://localhost:8000/docs`.
 
 ### Endpoints
 
@@ -70,32 +75,22 @@ interaktif Swagger UI di `http://localhost:8000/docs`.
 | GET | `/api/v1/trips/{id}` | Detail satu trip (404 jika tidak ada) |
 | PUT | `/api/v1/trips/{id}` | Update budget trip; category & daily_budget dihitung ulang |
 | DELETE | `/api/v1/trips/{id}` | Hapus trip (404 jika tidak ada) |
+| POST | `/api/v1/trips/{id}/generate` | Generate itinerary AI (Amazon Bedrock) & simpan ke DB |
 | GET | `/api/v1/recommendations` | Daftar rekomendasi tempat wisata |
 | GET | `/api/v1/transportations` | Daftar pilihan moda transportasi |
 
-### Contoh Request/Response
+### Rich AI Prompt (Sesi 5)
 
-**POST** `/api/v1/trips`
-```json
-{
-  "destination": "Japan",
-  "days": 5,
-  "budget": 2000
-}
-```
+`POST /api/v1/trips/{id}/generate` mengirim prompt terstruktur ke Amazon
+Bedrock yang meminta rencana harian dengan format:
 
-**Response (200 OK)**
-```json
-{
-  "id": 1,
-  "destination": "Japan",
-  "days": 5,
-  "budget": 2000,
-  "daily_budget": 400.0,
-  "category": "Standard",
-  "created_at": "2026-08-20T04:59:43"
-}
-```
+- **Morning** — 2-3 aktivitas pagi spesifik
+- **Afternoon** — situs budaya + pengalaman lokal
+- **Evening** — rekomendasi makan malam + hiburan malam
+
+Ditambah ringkasan akhir (estimasi budget harian, rekomendasi kuliner,
+saran transportasi, tips perjalanan), diformat dalam Markdown. Hasilnya
+disimpan permanen di kolom `ai_recommendation` pada tabel `trips`.
 
 ### Aturan Bisnis
 
@@ -119,4 +114,5 @@ interaktif Swagger UI di `http://localhost:8000/docs`.
 - [x] Sesi 2: Recommendation Engine (layered architecture)
 - [x] Sesi 3: REST API dengan FastAPI
 - [x] Sesi 4: Persistence Layer (PostgreSQL + SQLAlchemy, full CRUD)
-- [ ] Sesi 5: ...
+- [x] Sesi 5: AI Integration (Amazon Bedrock, rich prompt engineering)
+- [ ] Sesi 6: ...

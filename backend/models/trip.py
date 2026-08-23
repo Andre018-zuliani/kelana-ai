@@ -6,7 +6,7 @@ Model SQLAlchemy untuk tabel `trips`. Satu class Python di sini
 merepresentasikan satu tabel di PostgreSQL; setiap atribut menjadi kolom.
 """
 
-from sqlalchemy import Column, DateTime, Float, Integer, String
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.sql import func
 
 from database import Base
@@ -21,6 +21,10 @@ class Trip(Base):
     budget = Column(Float, nullable=False)
     category = Column(String, nullable=False)
     daily_budget = Column(Float, nullable=False)
+
+    # Sesi 5 — menyimpan hasil rekomendasi AI dari Amazon Bedrock.
+    # nullable=True karena trip lama (sebelum Sesi 5) belum punya nilai ini.
+    ai_recommendation = Column(Text, nullable=True)
 
     # Bonus: timestamp otomatis saat trip pertama kali dibuat
     created_at = Column(
