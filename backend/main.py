@@ -14,9 +14,10 @@ services/trip_service.py dan digunakan kembali di sini tanpa diubah
 (separation of concerns).
 """
 
-from typing import List
+from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from database import SessionLocal, init_db
@@ -31,6 +32,16 @@ from services.trip_service import (
 
 app = FastAPI(title="KelanaAI API")
 
+# Mengizinkan Next.js (berjalan di port 3000) memanggil API ini (port 8000).
+# Frontend TIDAK PERNAH memanggil Amazon Bedrock secara langsung -- selalu
+# lewat FastAPI ini.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Membuat seluruh tabel (kalau belum ada) saat aplikasi start
 init_db()
 
@@ -39,6 +50,9 @@ class TripRequest(BaseModel):
     destination: str
     days: int
     budget: float
+    # Opsional: dikirim oleh form Next.js untuk konteks tambahan, tidak
+    # memengaruhi kalkulasi category/daily_budget yang sudah ada.
+    travel_style: Optional[str] = None
 
 
 class TripUpdateRequest(BaseModel):
