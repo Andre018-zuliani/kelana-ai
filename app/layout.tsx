@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AuthProvider } from "@/lib/auth_context";
+import Navbar from "@/components/Navbar";
 
 export const metadata: Metadata = {
-  title: "KelanaAI — Plan your next adventure",
+  title: "KelanaAI — AI Travel Planner with Protected User Trips",
   description:
-    "AI-powered travel itinerary planner built with Next.js, FastAPI, and Amazon Bedrock.",
+    "AI-powered personalized travel itinerary planner with secure user accounts and protected trips.",
 };
 
 export default function RootLayout({
@@ -12,10 +14,14 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans bg-slate-50 text-slate-900">
+        <AuthProvider>
+          <Navbar />
+          <div className="flex-1 flex flex-col">{children}</div>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 import { getTripFromDb, updateTripInDb } from "@/lib/db";
 import { generateTripRecommendation } from "@/lib/ai_service";
+import { getAuthenticatedUser } from "@/lib/auth";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = getAuthenticatedUser(request);
+  if (!user) {
+    return NextResponse.json(
+      { detail: "Not authenticated" },
+      { status: 401 }
+    );
+  }
+
   const { id } = await params;
   const tripId = Number(id);
   const trip = getTripFromDb(tripId);
@@ -14,6 +23,13 @@ export async function POST(
     return NextResponse.json(
       { detail: `Trip with id ${id} not found` },
       { status: 404 }
+    );
+  }
+
+  if (trip.user_id !== user.id) {
+    return NextResponse.json(
+      { detail: "Forbidden: You cannot generate itinerary for another user's trip" },
+      { status: 403 }
     );
   }
 
@@ -37,7 +53,7 @@ export async function POST(
   } catch (error) {
     console.error("Error generating trip recommendation:", error);
     return NextResponse.json(
-      { error: "Failed to generate AI recommendation." },
+      { detail: "Failed to generate AI recommendation." },
       { status: 500 }
     );
   }
