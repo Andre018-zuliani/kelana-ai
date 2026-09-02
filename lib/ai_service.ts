@@ -1,12 +1,14 @@
 import { GoogleGenAI } from "@google/genai";
+import { retrieveRelevantChunks } from "./rag_service";
 
 export function buildTripPrompt(
   destination: string,
   days: number,
   budget: number,
-  category: string
+  category: string,
+  knowledgeContext?: string
 ): string {
-  return `You are an experienced local travel planner.
+  let prompt = `You are an experienced local travel planner.
 
 Create a detailed day-by-day itinerary for a ${days}-day trip to ${destination}.
 
@@ -14,9 +16,16 @@ Trip details:
 - Destination: ${destination}
 - Number of days: ${days}
 - Total budget: USD ${budget.toFixed(0)}
-- Travel style / category: ${category}
+- Travel style / category: ${category}`;
 
-For EVERY single day, structure the plan into exactly three sections
+  if (knowledgeContext) {
+    prompt += `\n\nVERIFIED LOCAL KNOWLEDGE BASE EXCERPTS (RAG GROUNDING):
+${knowledgeContext}
+
+IMPORTANT: Incorporate these verified local rules, transit pass details, and cultural etiquette into the itinerary where relevant!`;
+  }
+
+  prompt += `\n\nFor EVERY single day, structure the plan into exactly three sections
 using this format:
 
 ## Day X: <short theme for the day>
@@ -36,10 +45,13 @@ After all the daily sections, add a final summary section with:
 - Estimated daily budget breakdown (based on the total budget of USD ${budget.toFixed(0)}).
 - 2-3 local food recommendations worth trying overall.
 - Transportation suggestions for getting around ${destination}.
+- Verified Local Knowledge & Etiquette (cite any rules, fines, or passes from the knowledge base).
 - General travel tips for visiting ${destination}.
 
 Format the entire response in Markdown: use "##" for each day's header and
 "-" for bullet lists under Morning / Afternoon / Evening.`;
+
+  return prompt;
 }
 
 export async function generateTripRecommendation(
@@ -48,7 +60,12 @@ export async function generateTripRecommendation(
   budget: number,
   category: string
 ): Promise<string> {
-  const prompt = buildTripPrompt(destination, days, budget, category);
+  const relevantChunks = retrieveRelevantChunks(destination, 2);
+  const knowledgeContext = relevantChunks.length > 0
+    ? relevantChunks.map((c) => `[Source: ${c.filename} - ${c.section}]\n${c.text}`).join("\n\n")
+    : undefined;
+
+  const prompt = buildTripPrompt(destination, days, budget, category, knowledgeContext);
 
   try {
     const ai = new GoogleGenAI({
@@ -61,7 +78,7 @@ export async function generateTripRecommendation(
     });
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
     });
 
@@ -73,14 +90,15 @@ export async function generateTripRecommendation(
   }
 
   // Fallback itinerary generator if offline or API key not configured
-  return generateFallbackItinerary(destination, days, budget, category);
+  return generateFallbackItinerary(destination, days, budget, category, relevantChunks);
 }
 
 function generateFallbackItinerary(
   destination: string,
   days: number,
   budget: number,
-  category: string
+  category: string,
+  relevantChunks: ReturnType<typeof retrieveRelevantChunks> = []
 ): string {
   const daily = days > 0 ? (budget / days).toFixed(0) : "0";
   let output = "";
@@ -112,5 +130,11 @@ Evening:
 - **Transportation**: Efficient metro trains, ride-hailing services, and walking between central districts.
 - **General Tips**: Keep local currency on hand, check operating hours for top sights, and book popular attractions in advance.`;
 
+  if (relevantChunks.length > 0) {
+    output += `\n\n### 📚 KelanaAI Verified Local Knowledge Base Insights (RAG)
+${relevantChunks.map((c) => `- **${c.section}** (*from ${c.filename}*): ${c.text.split("\n")[1] || c.text.slice(0, 140)}`).join("\n")}`;
+  }
+
   return output;
 }
+

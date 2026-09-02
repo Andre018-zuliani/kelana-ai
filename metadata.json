@@ -1,6 +1,6 @@
 {
   "name": "KelanaAI",
-  "description": "AI-powered travel itinerary planner",
+  "description": "AI Travel Planner with Amazon Bedrock Knowledge Base (RAG) and itinerary generator",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

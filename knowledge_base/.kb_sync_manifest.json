@@ -1,0 +1,50 @@
+{
+  "bucket": "kelana-ai-knowledge-base-production",
+  "prefix": "travel-docs/",
+  "knowledge_base_id": "KB-KELANA-AI-2026",
+  "data_source_id": "DS-TRAVEL-DOCS-01",
+  "last_sync": "2026-09-02T15:48:26.147584Z",
+  "ingestion_job_id": "job-e4a3cca5",
+  "documents": [
+    {
+      "filename": "bali_waterfalls_and_cultural_etiquette.md",
+      "s3_uri": "s3://kelana-ai-knowledge-base-production/travel-docs/bali_waterfalls_and_cultural_etiquette.md",
+      "bytes": 3445,
+      "hash": "36a74c4eeda7",
+      "status": "SYNCED_MOCK_S3",
+      "synced_at": "2026-09-02T15:48:26.147130Z"
+    },
+    {
+      "filename": "kyoto_cultural_rules_and_transport_pass.md",
+      "s3_uri": "s3://kelana-ai-knowledge-base-production/travel-docs/kyoto_cultural_rules_and_transport_pass.md",
+      "bytes": 3413,
+      "hash": "1b012a816587",
+      "status": "SYNCED_MOCK_S3",
+      "synced_at": "2026-09-02T15:48:26.147235Z"
+    },
+    {
+      "filename": "paris_museum_pass_and_metro_transit_guide.md",
+      "s3_uri": "s3://kelana-ai-knowledge-base-production/travel-docs/paris_museum_pass_and_metro_transit_guide.md",
+      "bytes": 3491,
+      "hash": "37aa021ec0e6",
+      "status": "SYNCED_MOCK_S3",
+      "synced_at": "2026-09-02T15:48:26.147320Z"
+    },
+    {
+      "filename": "raja_ampat_conservation_and_logistics_guide.md",
+      "s3_uri": "s3://kelana-ai-knowledge-base-production/travel-docs/raja_ampat_conservation_and_logistics_guide.md",
+      "bytes": 3487,
+      "hash": "78d938aec0fd",
+      "status": "SYNCED_MOCK_S3",
+      "synced_at": "2026-09-02T15:48:26.147400Z"
+    },
+    {
+      "filename": "swiss_alps_rail_passes_and_hiking_regulations.md",
+      "s3_uri": "s3://kelana-ai-knowledge-base-production/travel-docs/swiss_alps_rail_passes_and_hiking_regulations.md",
+      "bytes": 3610,
+      "hash": "9fe0c601dd8e",
+      "status": "SYNCED_MOCK_S3",
+      "synced_at": "2026-09-02T15:48:26.147487Z"
+    }
+  ]
+}

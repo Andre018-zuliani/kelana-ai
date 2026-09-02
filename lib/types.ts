@@ -42,3 +42,58 @@ export interface ApiErrorResponse {
   detail?: string;
   error?: string;
 }
+
+export interface KnowledgeDocument {
+  id: string;
+  filename: string;
+  title: string;
+  destination: string;
+  s3_uri: string;
+  bytes: number;
+  char_count: number;
+  chunk_count: number;
+  last_synced: string;
+  content: string;
+  status: "SYNCED" | "LOCAL_STAGED" | "UPLOADED_TO_S3";
+}
+
+export interface KnowledgeChunk {
+  chunk_id: string;
+  document_id: string;
+  document_title: string;
+  filename: string;
+  section: string;
+  text: string;
+  score?: number;
+}
+
+export interface RagComparisonResult {
+  id: string;
+  question: string;
+  destination: string;
+  base_model: {
+    model_name: string;
+    answer: string;
+    latency_ms: number;
+    accuracy_rating: "Low" | "Medium" | "High";
+    weaknesses: string[];
+  };
+  rag_model: {
+    model_name: string;
+    answer: string;
+    latency_ms: number;
+    accuracy_rating: "Low" | "Medium" | "High";
+    cited_sources: Array<{
+      filename: string;
+      section: string;
+    }>;
+    retrieved_chunks: KnowledgeChunk[];
+    verified_facts: string[];
+  };
+  improvement_summary: {
+    accuracy_boost: string;
+    hallucination_fixed: string;
+    actionable_insight: string;
+  };
+}
+
