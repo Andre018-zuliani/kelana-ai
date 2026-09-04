@@ -19,16 +19,47 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const TOKEN_KEY = "kelana_auth_token";
 const USER_KEY = "kelana_auth_user";
 
+function safeGetItem(key: string): string | null {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      return window.localStorage.getItem(key);
+    }
+  } catch (e) {
+    console.warn(`SafeStorage get error for ${key}:`, e);
+  }
+  return null;
+}
+
+function safeSetItem(key: string, value: string): void {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem(key, value);
+    }
+  } catch (e) {
+    console.warn(`SafeStorage set error for ${key}:`, e);
+  }
+}
+
+function safeRemoveItem(key: string): void {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.removeItem(key);
+    }
+  } catch (e) {
+    console.warn(`SafeStorage remove error for ${key}:`, e);
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize auth state from localStorage on mount
+  // Initialize auth state from safe storage on mount
   useEffect(() => {
     try {
-      const storedToken = localStorage.getItem(TOKEN_KEY);
-      const storedUser = localStorage.getItem(USER_KEY);
+      const storedToken = safeGetItem(TOKEN_KEY);
+      const storedUser = safeGetItem(USER_KEY);
 
       if (storedToken && storedUser) {
         setToken(storedToken);
@@ -49,20 +80,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ detail: "Gagal memproses respon server" }));
       if (!res.ok) {
-        return { success: false, error: data.detail || "Login failed" };
+        return { success: false, error: data.detail || "Login gagal. Silakan periksa kembali." };
       }
 
       const authData = data as AuthResponse;
       setUser(authData.user);
       setToken(authData.token);
-      localStorage.setItem(TOKEN_KEY, authData.token);
-      localStorage.setItem(USER_KEY, JSON.stringify(authData.user));
+      safeSetItem(TOKEN_KEY, authData.token);
+      safeSetItem(USER_KEY, JSON.stringify(authData.user));
 
       return { success: true };
-    } catch {
-      return { success: false, error: "Network error occurred during login." };
+    } catch (err) {
+      console.error("Login catch error:", err);
+      return { success: false, error: "Gagal menghubungkan ke server login. Silakan coba lagi." };
     }
   }, []);
 
@@ -74,34 +106,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ name, email, password }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ detail: "Gagal memproses respon server" }));
       if (!res.ok) {
-        return { success: false, error: data.detail || "Registration failed" };
+        return { success: false, error: data.detail || "Pendaftaran gagal" };
       }
 
       const authData = data as AuthResponse;
       setUser(authData.user);
       setToken(authData.token);
-      localStorage.setItem(TOKEN_KEY, authData.token);
-      localStorage.setItem(USER_KEY, JSON.stringify(authData.user));
+      safeSetItem(TOKEN_KEY, authData.token);
+      safeSetItem(USER_KEY, JSON.stringify(authData.user));
 
       return { success: true };
-    } catch {
-      return { success: false, error: "Network error occurred during registration." };
+    } catch (err) {
+      console.error("Register catch error:", err);
+      return { success: false, error: "Gagal mendaftar. Silakan coba lagi." };
     }
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    safeRemoveItem(TOKEN_KEY);
+    safeRemoveItem(USER_KEY);
   }, []);
 
   const authFetch = useCallback(
     async (url: string, options: RequestInit = {}) => {
       const headers = new Headers(options.headers || {});
-      const currentToken = token || localStorage.getItem(TOKEN_KEY);
+      const currentToken = token || safeGetItem(TOKEN_KEY);
 
       if (currentToken) {
         headers.set("Authorization", `Bearer ${currentToken}`);

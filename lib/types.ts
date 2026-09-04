@@ -97,3 +97,22 @@ export interface RagComparisonResult {
   };
 }
 
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  created_at: string;
+}
+
+export interface Conversation {
+  id: string;
+  user_id: number;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  messages: ChatMessage[];
+  last_message?: string;
+  message_count?: number;
+}
+

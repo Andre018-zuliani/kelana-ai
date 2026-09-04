@@ -38,6 +38,16 @@ export default function Hero() {
         <p className="mt-4 text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
           KelanaAI crafts customized, day-by-day itineraries tailored to your budget and travel style. Every trip you create is securely saved to your personal account.
         </p>
+
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href="/chat"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-semibold text-xs rounded-xl shadow-md hover:shadow-emerald-500/20 transition-all cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-slate-950" />
+            <span>Mulai Obrolan Multi-Turn (Conversational Memory)</span>
+          </a>
+        </div>
       </div>
     </section>
   );

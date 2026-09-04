@@ -14,6 +14,7 @@ import {
   UserPlus,
   ShieldCheck,
   BookOpen,
+  MessageSquare,
 } from "lucide-react";
 
 export default function Navbar() {
@@ -80,6 +81,18 @@ export default function Navbar() {
                 >
                   <ListOrdered className="w-4 h-4" />
                   My Trips
+                </Link>
+
+                <Link
+                  href="/chat"
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive("/chat")
+                      ? "bg-emerald-50 text-emerald-700 font-semibold"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4 text-emerald-600" />
+                  <span>AI Chat</span>
                 </Link>
 
                 <Link
@@ -193,6 +206,17 @@ export default function Navbar() {
             >
               <ListOrdered className="w-3.5 h-3.5" />
               My Trips
+            </Link>
+            <Link
+              href="/chat"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${
+                isActive("/chat")
+                  ? "bg-emerald-50 text-emerald-700 font-semibold"
+                  : "text-slate-600"
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+              AI Chat
             </Link>
             <Link
               href="/knowledge-base"
