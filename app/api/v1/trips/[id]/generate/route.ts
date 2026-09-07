@@ -7,7 +7,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json(
       { detail: "Not authenticated" },
@@ -17,7 +17,7 @@ export async function POST(
 
   const { id } = await params;
   const tripId = Number(id);
-  const trip = getTripFromDb(tripId);
+  const trip = await getTripFromDb(tripId);
 
   if (!trip) {
     return NextResponse.json(
@@ -41,7 +41,7 @@ export async function POST(
       trip.category
     );
 
-    updateTripInDb(tripId, {
+    await updateTripInDb(tripId, {
       ai_recommendation: recommendation,
     });
 

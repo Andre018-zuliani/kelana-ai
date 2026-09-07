@@ -18,10 +18,10 @@ export async function POST(request: Request) {
     const cleanPassword = String(password).trim();
 
     // 1. Check if user credentials match
-    let user = verifyUserCredentials(cleanEmail, cleanPassword);
+    let user = await verifyUserCredentials(cleanEmail, cleanPassword);
 
     if (!user) {
-      const existingUser = findUserByEmail(cleanEmail);
+      const existingUser = await findUserByEmail(cleanEmail);
       if (existingUser) {
         // User exists, but password didn't match
         return NextResponse.json(
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
         .replace(/[._-]/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase());
 
-      user = createUser({
+      user = await createUser({
         name: inferredName || "Traveler",
         email: cleanEmail,
         password: cleanPassword || "password123",

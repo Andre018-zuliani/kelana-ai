@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 
 export async function GET(request: Request) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
 
   if (!user) {
     return NextResponse.json(

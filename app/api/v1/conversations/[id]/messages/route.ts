@@ -14,7 +14,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json(
       { detail: "Not authenticated. Please log in." },
@@ -23,7 +23,7 @@ export async function POST(
   }
 
   const { id } = await params;
-  const conversation = getConversationFromDb(id, user.id);
+  const conversation = await getConversationFromDb(id, user.id);
 
   if (!conversation) {
     return NextResponse.json(
@@ -44,7 +44,7 @@ export async function POST(
     }
 
     // 1. Record user message in DB with timestamp
-    const userMessage = addMessageToConversationInDb(id, {
+    const userMessage = await addMessageToConversationInDb(id, {
       role: "user",
       content,
       created_at: new Date().toISOString(),
@@ -59,14 +59,14 @@ export async function POST(
 
     // 2. Pass conversational history from DB to the AI model
     // This demonstrates Conversational Memory for stateless LLMs
-    const updatedConversation = getConversationFromDb(id, user.id);
+    const updatedConversation = await getConversationFromDb(id, user.id);
     const history = updatedConversation ? updatedConversation.messages : [userMessage];
 
     // Generate response using conversational memory
     const aiResponseText = await generateChatResponse(history, content);
 
     // 3. Record assistant message in DB with timestamp
-    const assistantMessage = addMessageToConversationInDb(id, {
+    const assistantMessage = await addMessageToConversationInDb(id, {
       role: "assistant",
       content: aiResponseText,
       created_at: new Date().toISOString(),
@@ -78,10 +78,10 @@ export async function POST(
       conversation.title === "New Conversation"
     ) {
       const suggestedTitle = generateSuggestedTitle(content);
-      updateConversationTitleInDb(id, suggestedTitle, user.id);
+      await updateConversationTitleInDb(id, suggestedTitle, user.id);
     }
 
-    const finalConversation = getConversationFromDb(id, user.id);
+    const finalConversation = await getConversationFromDb(id, user.id);
 
     return NextResponse.json({
       user_message: userMessage,

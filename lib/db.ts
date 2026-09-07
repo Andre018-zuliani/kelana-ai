@@ -1,19 +1,87 @@
+import { Pool } from "pg";
 import type { Trip, User, ChatMessage, Conversation } from "./types";
+
+// PostgreSQL connection pool (works on Vercel via Neon / Vercel Postgres,
+// and locally via the DATABASE_URL in .env). Schema is created on startup
+// so nothing extra needs to be provisioned on Vercel.
+const DATABASE_URL =
+  process.env.DATABASE_URL ||
+  (process.env.NODE_ENV === "production"
+    ? (() => {
+        throw new Error("DATABASE_URL must be set in production");
+      })()
+    : "postgresql://postgres:123@localhost:5432/kelana_ai");
+
+const isLocal =
+  !process.env.VERCEL &&
+  (DATABASE_URL.includes("localhost") || DATABASE_URL.includes("127.0.0.1"));
+
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: isLocal
+    ? false
+    : { rejectUnauthorized: false },
+});
 
 interface UserRecord extends User {
   password_hash: string;
 }
 
-// In-memory data store for users, trips, & conversations
-let nextUserId = 1;
-let nextTripId = 1;
-let nextMessageId = 1;
+let initialized = false;
 
-const usersMap = new Map<number, UserRecord>();
-const tripsMap = new Map<number, Trip>();
-const conversationsMap = new Map<string, Conversation>();
+async function ensureInitialized(): Promise<void> {
+  if (initialized) return;
 
-// Simple hash helper for demo purposes
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS trips (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      destination TEXT NOT NULL,
+      days INTEGER NOT NULL,
+      budget FLOAT NOT NULL,
+      category TEXT NOT NULL,
+      daily_budget FLOAT NOT NULL,
+      travel_style TEXT DEFAULT 'standard',
+      ai_recommendation TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id SERIAL PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await seedIfEmpty();
+  initialized = true;
+}
+
+// Simple hash helper for demo purposes (same as previous in-memory version)
 function simpleHash(password: string): string {
   let hash = 0;
   for (let i = 0; i < password.length; i++) {
@@ -24,40 +92,41 @@ function simpleHash(password: string): string {
   return `hash_${Math.abs(hash)}_${password.length}`;
 }
 
-// Seed initial users & trips if empty
-function initSeedData() {
-  if (usersMap.size === 0) {
-    const user1: UserRecord = {
-      id: nextUserId++,
-      name: "Demo Traveler",
-      email: "demo@kelana.ai",
-      password_hash: simpleHash("password123"),
-      created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    };
-    usersMap.set(user1.id, user1);
+async function seedIfEmpty(): Promise<void> {
+  const daysAgo = (d: number) =>
+    new Date(Date.now() - d * 24 * 60 * 60 * 1000).toISOString();
+  const hoursAgo = (h: number) =>
+    new Date(Date.now() - h * 3600 * 1000).toISOString();
 
-    const user2: UserRecord = {
-      id: nextUserId++,
-      name: "Jane Explorer",
-      email: "jane@kelana.ai",
-      password_hash: simpleHash("password123"),
-      created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    };
-    usersMap.set(user2.id, user2);
+  const { rows: userRows } = await pool.query(
+    "SELECT id FROM users ORDER BY id ASC LIMIT 4"
+  );
+  const userIds: number[] = userRows.map((r) => r.id as number);
 
-    const user3: UserRecord = {
-      id: nextUserId++,
-      name: "Andre Syarief",
-      email: "andresyarief7@gmail.com",
-      password_hash: simpleHash("password123"),
-      created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    };
-    usersMap.set(user3.id, user3);
+  if (userIds.length === 0) {
+    // --- Users ---
+    const users: Array<{ name: string; email: string }> = [
+      { name: "Demo Traveler", email: "demo@kelana.ai" },
+      { name: "Jane Explorer", email: "jane@kelana.ai" },
+      { name: "Andre Syarief", email: "andresyarief7@gmail.com" },
+    ];
 
-    // Initial trips for User 1
-    const trip1: Trip = {
-      id: nextTripId++,
-      user_id: user1.id,
+    for (const u of users) {
+      const { rows } = await pool.query(
+        `INSERT INTO users (name, email, password_hash, created_at)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [u.name, u.email, simpleHash("password123"), daysAgo(3)]
+      );
+      userIds.push(rows[0].id as number);
+    }
+  }
+
+  const [demoUserId, janeUserId, andreUserId] = userIds;
+
+  const { rows: tripRows } = await pool.query("SELECT id FROM trips LIMIT 1");
+  if (tripRows.length === 0) {
+    // --- Trips ---
+    const demoTrip = {
       destination: "Kyoto, Japan",
       days: 5,
       budget: 2500,
@@ -76,28 +145,11 @@ Afternoon:
 
 Evening:
 - Stroll through Pontocho Alley to spot geiko and maiko.
-- Savor authentic Kyoto-style Kaiseki dinner by the Kamogawa River.
-
-## Day 2: Bamboo Groves & Golden Pavilions
-
-Morning:
-- Walk through the Arashiyama Bamboo Grove at sunrise.
-- Visit Tenryu-ji Temple World Heritage garden.
-
-Afternoon:
-- Take the Sagano Romantic Train ride along the Hozugawa River.
-- Tour Kinkaku-ji (The Golden Pavilion) reflecting in the mirror pond.
-
-Evening:
-- Dine on hot Yudofu (tofu hot pot) near central Kyoto Station.`,
-      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+- Savor authentic Kyoto-style Kaiseki dinner by the Kamogawa River.`,
+      created_at: daysAgo(2),
     };
-    tripsMap.set(trip1.id, trip1);
 
-    // Initial trip for User 2 (to verify user isolation)
-    const trip2: Trip = {
-      id: nextTripId++,
-      user_id: user2.id,
+    const janeTrip = {
       destination: "Paris, France",
       days: 4,
       budget: 3200,
@@ -117,14 +169,10 @@ Afternoon:
 Evening:
 - Michelin-starred dining experience in Saint-Germain.
 - Evening illuminations cruise on the Seine.`,
-      created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      created_at: daysAgo(1),
     };
-    tripsMap.set(trip2.id, trip2);
 
-    // Initial trip for Andre Syarief
-    const trip3: Trip = {
-      id: nextTripId++,
-      user_id: user3.id,
+    const andreTrip = {
       destination: "Swiss Alps & Interlaken",
       days: 6,
       budget: 3500,
@@ -134,28 +182,49 @@ Evening:
       ai_recommendation: `## Day 1: Arrival in Interlaken & Lake Brienz Cruise
 - Arrive at Interlaken Ost station with Swiss Travel Pass.
 - Check-in to alpine chalet overlooking the Jungfrau massif.
-- Afternoon boat cruise across turquoise Lake Brienz to Giessbach Falls.
-
-## Day 2: Jungfraujoch Top of Europe
-- Early train via Lauterbrunnen and Kleine Scheidegg.
-- Note: Swiss Travel Pass covers 100% up to Grindelwald/Wengen, with 25% discount to Jungfraujoch summit.
-- Tour the Ice Palace and Sphinx Observatory.`,
-      created_at: new Date().toISOString(),
+- Afternoon boat cruise across turquoise Lake Brienz to Giessbach Falls.`,
+      created_at: daysAgo(0),
     };
-    tripsMap.set(trip3.id, trip3);
 
-    // Seed Conversation 1: Kyoto Culture & Transport
-    const conv1Messages: ChatMessage[] = [
+    const tripRowsSeed = [
+      { ...demoTrip, user_id: demoUserId },
+      { ...janeTrip, user_id: janeUserId },
+      { ...andreTrip, user_id: andreUserId },
+    ];
+
+    for (const t of tripRowsSeed) {
+      await pool.query(
+        `INSERT INTO trips
+           (user_id, destination, days, budget, category, daily_budget, travel_style, ai_recommendation, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          t.user_id,
+          t.destination,
+          t.days,
+          t.budget,
+          t.category,
+          t.daily_budget,
+          t.travel_style,
+          t.ai_recommendation,
+          t.created_at,
+        ]
+      );
+    }
+  }
+
+  const { rows: convRows } = await pool.query(
+    "SELECT id FROM conversations LIMIT 1"
+  );
+  if (convRows.length === 0) {
+    // --- Conversations (Andre) ---
+    const convKyotoMessages = [
       {
-        id: `msg-${nextMessageId++}`,
-        conversation_id: "conv-kyoto-01",
         role: "user",
-        content: "Halo KelanaAI! Aku berencana keliling Kyoto selama 4 hari. Ada tips etika berkunjung ke kuil dan aturan lokal yang perlu aku ketahui?",
-        created_at: new Date(Date.now() - 3600 * 1000 * 4).toISOString(),
+        content:
+          "Halo KelanaAI! Aku berencana keliling Kyoto selama 4 hari. Ada tips etika berkunjung ke kuil dan aturan lokal yang perlu aku ketahui?",
+        created_at: hoursAgo(4),
       },
       {
-        id: `msg-${nextMessageId++}`,
-        conversation_id: "conv-kyoto-01",
         role: "assistant",
         content: `Halo! Senang bisa mendampingi petualanganmu ke Kyoto. Berdasarkan basis pengetahuan resmi kami, berikut beberapa aturan krusial yang wajib diperhatikan:
 
@@ -164,18 +233,14 @@ Evening:
 3. **Tiket Transportasi**: Untuk transportasi harian, lebih disarankan memakai kartu **IC (ICOCA / Suica)** untuk fleksibilitas bus & kereta Keihan, karena tiket bus harian 1-hari sudah dihapus untuk mengurai kepadatan bus kota.
 
 Apakah kamu ingin rekomendasi rute untuk hari pertama?`,
-        created_at: new Date(Date.now() - 3600 * 1000 * 3.9).toISOString(),
+        created_at: hoursAgo(3.9),
       },
       {
-        id: `msg-${nextMessageId++}`,
-        conversation_id: "conv-kyoto-01",
         role: "user",
         content: "Wah terima kasih! Sangat informatif. Kalau untuk hari pertama di area Higashiyama, rute mana yang paling optimal?",
-        created_at: new Date(Date.now() - 3600 * 1000 * 3.5).toISOString(),
+        created_at: hoursAgo(3.5),
       },
       {
-        id: `msg-${nextMessageId++}`,
-        conversation_id: "conv-kyoto-01",
         role: "assistant",
         content: `Untuk hari pertama di **Higashiyama Selatan & Tengah**, berikut urutan rute yang paling efisien:
 
@@ -185,42 +250,35 @@ Apakah kamu ingin rekomendasi rute untuk hari pertama?`,
 - **Sore & Malam (16:30 - 19:30)**: Berjalan santai ke **Yasaka Shrine**, lanjut menyusuri jalan utama Hanamikoji (ingat aturan denda foto di gang privat), dan tutup dengan santap malam di tepi kanal **Pontocho**.
 
 Bagaimana menurutmu? Mau ditambahkan destinasi kuliner spesifik untuk makan malamnya?`,
-        created_at: new Date(Date.now() - 3600 * 1000 * 3.4).toISOString(),
+        created_at: hoursAgo(3.4),
       },
     ];
 
-    const conv1: Conversation = {
-      id: "conv-kyoto-01",
-      user_id: user3.id,
-      title: "Eksplorasi Budaya & Kereta Kyoto",
-      created_at: new Date(Date.now() - 3600 * 1000 * 4).toISOString(),
-      updated_at: new Date(Date.now() - 3600 * 1000 * 3.4).toISOString(),
-      messages: conv1Messages,
-      last_message: "Bagaimana menurutmu? Mau ditambahkan destinasi kuliner spesifik untuk makan malamnya?",
-      message_count: 4,
-    };
-    conversationsMap.set(conv1.id, conv1);
+    await pool.query(
+      `INSERT INTO conversations (id, user_id, title, created_at, updated_at)
+       VALUES ('conv-kyoto-01', $1, 'Eksplorasi Budaya & Kereta Kyoto', $2, $3)`,
+      [andreUserId, hoursAgo(4), hoursAgo(3.4)]
+    );
+    for (const m of convKyotoMessages) {
+      await pool.query(
+        `INSERT INTO messages (conversation_id, role, content, created_at)
+         VALUES ('conv-kyoto-01', $1, $2, $3)`,
+        [m.role, m.content, m.created_at]
+      );
+    }
 
-    // Also copy for user1
-    const conv1User1: Conversation = {
-      ...conv1,
-      id: "conv-kyoto-demo",
-      user_id: user1.id,
-    };
-    conversationsMap.set(conv1User1.id, conv1User1);
-
-    // Seed Conversation 2: Swiss Alps
-    const conv2Messages: ChatMessage[] = [
+    await pool.query(
+      `INSERT INTO conversations (id, user_id, title, created_at, updated_at)
+       VALUES ('conv-swiss-02', $1, 'Cakupan Swiss Travel Pass ke Jungfraujoch', $2, $3)`,
+      [andreUserId, hoursAgo(2), hoursAgo(1.9)]
+    );
+    const convSwissMessages = [
       {
-        id: `msg-${nextMessageId++}`,
-        conversation_id: "conv-swiss-02",
         role: "user",
         content: "Berapa persen diskon kereta ke puncak Jungfraujoch jika memakai Swiss Travel Pass?",
-        created_at: new Date(Date.now() - 3600 * 1000 * 2).toISOString(),
+        created_at: hoursAgo(2),
       },
       {
-        id: `msg-${nextMessageId++}`,
-        conversation_id: "conv-swiss-02",
         role: "assistant",
         content: `Pertanyaan tepat! Ini salah satu kesalahpahaman paling sering di kalangan traveler:
 
@@ -229,93 +287,148 @@ Bagaimana menurutmu? Mau ditambahkan destinasi kuliner spesifik untuk makan mala
 - Anda tetap perlu membeli tiket sambungan (biasanya sekitar CHF 150-180 return tergantung musim).
 
 Pastikan memesan reservasi kursi jika bepergian saat puncak musim panas (Juli-Agustus)!`,
-        created_at: new Date(Date.now() - 3600 * 1000 * 1.9).toISOString(),
+        created_at: hoursAgo(1.9),
       },
     ];
+    for (const m of convSwissMessages) {
+      await pool.query(
+        `INSERT INTO messages (conversation_id, role, content, created_at)
+         VALUES ('conv-swiss-02', $1, $2, $3)`,
+        [m.role, m.content, m.created_at]
+      );
+    }
 
-    const conv2: Conversation = {
-      id: "conv-swiss-02",
-      user_id: user3.id,
-      title: "Cakupan Swiss Travel Pass ke Jungfraujoch",
-      created_at: new Date(Date.now() - 3600 * 1000 * 2).toISOString(),
-      updated_at: new Date(Date.now() - 3600 * 1000 * 1.9).toISOString(),
-      messages: conv2Messages,
-      last_message: "Pastikan memesan reservasi kursi jika bepergian saat puncak musim panas (Juli-Agustus)!",
-      message_count: 2,
-    };
-    conversationsMap.set(conv2.id, conv2);
+    // Demo conversation for Demo Traveler (user 1)
+    await pool.query(
+      `INSERT INTO conversations (id, user_id, title, created_at, updated_at)
+       VALUES ('conv-kyoto-demo', $1, 'Eksplorasi Budaya & Kereta Kyoto', $2, $3)`,
+      [demoUserId, hoursAgo(4), hoursAgo(3.4)]
+    );
+    for (const m of convKyotoMessages) {
+      await pool.query(
+        `INSERT INTO messages (conversation_id, role, content, created_at)
+         VALUES ('conv-kyoto-demo', $1, $2, $3)`,
+        [m.role, m.content, m.created_at]
+      );
+    }
   }
 }
 
-initSeedData();
+function toISOString(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+
+function mapUserRow(row: UserRecord): User {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    created_at: toISOString(row.created_at),
+  };
+}
+
+function mapTripRow(row: any): Trip {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    destination: row.destination,
+    days: row.days,
+    budget: Number(row.budget),
+    category: row.category,
+    daily_budget: Number(row.daily_budget),
+    travel_style: row.travel_style,
+    ai_recommendation: row.ai_recommendation ?? null,
+    created_at: toISOString(row.created_at),
+  };
+}
+
+function mapMessageRow(row: any): ChatMessage {
+  return {
+    id: `msg-${row.id}`,
+    conversation_id: row.conversation_id,
+    role: row.role as ChatMessage["role"],
+    content: row.content,
+    created_at: toISOString(row.created_at),
+  };
+}
+
+async function mapConversationWithMessages(
+  row: any
+): Promise<Conversation> {
+  const { rows: messageRows } = await pool.query(
+    `SELECT id, conversation_id, role, content, created_at
+     FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC, id ASC`,
+    [row.id]
+  );
+  const messages = messageRows.map(mapMessageRow);
+  const createdAt = toISOString(row.created_at);
+  const updatedAt = toISOString(row.updated_at);
+
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    title: row.title,
+    created_at: createdAt,
+    updated_at: updatedAt,
+    messages,
+    last_message: messages[messages.length - 1]?.content,
+    message_count: messages.length,
+  };
+}
 
 // --- USER OPERATIONS ---
 
-export function findUserByEmail(email: string): UserRecord | null {
+export async function findUserByEmail(email: string): Promise<UserRecord | null> {
+  await ensureInitialized();
   const normalized = email.trim().toLowerCase();
-  for (const user of usersMap.values()) {
-    if (user.email.toLowerCase() === normalized) {
-      return user;
-    }
-  }
-  return null;
+  const { rows } = await pool.query(
+    `SELECT id, name, email, password_hash, created_at FROM users WHERE LOWER(email) = $1`,
+    [normalized]
+  );
+  return rows.length > 0 ? (rows[0] as UserRecord) : null;
 }
 
-export function findUserById(id: number): UserRecord | null {
-  return usersMap.get(id) ?? null;
+export async function findUserById(id: number): Promise<UserRecord | null> {
+  await ensureInitialized();
+  const { rows } = await pool.query(
+    `SELECT id, name, email, password_hash, created_at FROM users WHERE id = $1`,
+    [id]
+  );
+  return rows.length > 0 ? (rows[0] as UserRecord) : null;
 }
 
-export function createUser(data: {
+export async function createUser(data: {
   name: string;
   email: string;
   password: string;
-}): User {
-  const existing = findUserByEmail(data.email);
-  if (existing) {
-    throw new Error("Email is already registered");
-  }
-
-  const user: UserRecord = {
-    id: nextUserId++,
-    name: data.name.trim(),
-    email: data.email.trim().toLowerCase(),
-    password_hash: simpleHash(data.password),
-    created_at: new Date().toISOString(),
-  };
-
-  usersMap.set(user.id, user);
-
-  // Return public user object (without password_hash)
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    created_at: user.created_at,
-  };
+}): Promise<User> {
+  await ensureInitialized();
+  const { rows } = await pool.query(
+    `INSERT INTO users (name, email, password_hash)
+     VALUES ($1, $2, $3)
+     RETURNING id, name, email, created_at`,
+    [data.name.trim(), data.email.trim().toLowerCase(), simpleHash(data.password)]
+  );
+  return mapUserRow(rows[0] as UserRecord);
 }
 
-export function verifyUserCredentials(
+export async function verifyUserCredentials(
   email: string,
   password: string
-): User | null {
-  const user = findUserByEmail(email);
+): Promise<User | null> {
+  await ensureInitialized();
+  const user = await findUserByEmail(email);
   if (!user) return null;
-
   if (user.password_hash === simpleHash(password)) {
-    return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      created_at: user.created_at,
-    };
+    return mapUserRow(user);
   }
-
   return null;
 }
 
 // --- TRIP OPERATIONS ---
 
-export function createTripInDb(data: {
+export async function createTripInDb(data: {
   user_id: number;
   destination: string;
   days: number;
@@ -324,168 +437,209 @@ export function createTripInDb(data: {
   daily_budget: number;
   travel_style?: string;
   ai_recommendation?: string | null;
-}): Trip {
-  const trip: Trip = {
-    id: nextTripId++,
-    user_id: data.user_id,
-    destination: data.destination,
-    days: data.days,
-    budget: data.budget,
-    category: data.category,
-    daily_budget: data.daily_budget,
-    travel_style: data.travel_style || "standard",
-    ai_recommendation: data.ai_recommendation ?? null,
-    created_at: new Date().toISOString(),
-  };
-
-  tripsMap.set(trip.id, trip);
-  return trip;
+}): Promise<Trip> {
+  await ensureInitialized();
+  const { rows } = await pool.query(
+    `INSERT INTO trips
+       (user_id, destination, days, budget, category, daily_budget, travel_style, ai_recommendation)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     RETURNING *`,
+    [
+      data.user_id,
+      data.destination,
+      data.days,
+      data.budget,
+      data.category,
+      data.daily_budget,
+      data.travel_style || "standard",
+      data.ai_recommendation ?? null,
+    ]
+  );
+  return mapTripRow(rows[0]);
 }
 
-export function getTripFromDb(id: number): Trip | null {
-  return tripsMap.get(id) ?? null;
+export async function getTripFromDb(id: number): Promise<Trip | null> {
+  await ensureInitialized();
+  const { rows } = await pool.query(`SELECT * FROM trips WHERE id = $1`, [id]);
+  return rows.length > 0 ? mapTripRow(rows[0]) : null;
 }
 
-/**
- * Lists trips. If userId is provided, filters ONLY trips belonging to that user.
- */
-export function listTripsFromDb(userId?: number): Trip[] {
-  const allTrips = Array.from(tripsMap.values()).reverse();
-  if (userId !== undefined) {
-    return allTrips.filter((t) => t.user_id === userId);
-  }
-  return allTrips;
+export async function listTripsFromDb(userId?: number): Promise<Trip[]> {
+  await ensureInitialized();
+  const { rows } = userId
+    ? await pool.query(
+        `SELECT * FROM trips WHERE user_id = $1 ORDER BY created_at DESC, id DESC`,
+        [userId]
+      )
+    : await pool.query(`SELECT * FROM trips ORDER BY created_at DESC, id DESC`);
+  return rows.map(mapTripRow);
 }
 
-export function updateTripInDb(
+export async function updateTripInDb(
   id: number,
   updates: Partial<Trip>
-): Trip | null {
-  const existing = tripsMap.get(id);
+): Promise<Trip | null> {
+  await ensureInitialized();
+  const existing = await getTripFromDb(id);
   if (!existing) return null;
 
-  const updated: Trip = {
-    ...existing,
-    ...updates,
-    updated_at: new Date().toISOString(),
-  };
-
-  tripsMap.set(id, updated);
-  return updated;
+  const merged: Trip = { ...existing, ...updates };
+  const { rows } = await pool.query(
+    `UPDATE trips SET
+       destination = $1,
+       days = $2,
+       budget = $3,
+       category = $4,
+       daily_budget = $5,
+       travel_style = $6,
+       ai_recommendation = $7
+     WHERE id = $8
+     RETURNING *`,
+    [
+      merged.destination,
+      merged.days,
+      merged.budget,
+      merged.category,
+      merged.daily_budget,
+      merged.travel_style || "standard",
+      merged.ai_recommendation ?? null,
+      id,
+    ]
+  );
+  return rows.length > 0 ? mapTripRow(rows[0]) : null;
 }
 
-export function deleteTripFromDb(id: number): boolean {
-  return tripsMap.delete(id);
+export async function deleteTripFromDb(id: number): Promise<boolean> {
+  await ensureInitialized();
+  const { rowCount } = await pool.query(`DELETE FROM trips WHERE id = $1`, [id]);
+  return (rowCount ?? 0) > 0;
 }
 
 // --- CONVERSATION OPERATIONS ---
 
-export function listConversationsFromDb(userId?: number): Conversation[] {
-  const allConversations = Array.from(conversationsMap.values()).sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-  );
+export async function listConversationsFromDb(
+  userId?: number
+): Promise<Conversation[]> {
+  await ensureInitialized();
+  const { rows } = userId
+    ? await pool.query(
+        `SELECT c.*, m.content AS last_message_content
+         FROM conversations c
+         LEFT JOIN LATERAL (
+           SELECT content FROM messages
+           WHERE conversation_id = c.id
+           ORDER BY created_at DESC, id DESC LIMIT 1
+         ) m ON true
+         WHERE c.user_id = $1
+         ORDER BY c.updated_at DESC, c.created_at DESC`,
+        [userId]
+      )
+    : await pool.query(
+        `SELECT c.*, m.content AS last_message_content
+         FROM conversations c
+         LEFT JOIN LATERAL (
+           SELECT content FROM messages
+           WHERE conversation_id = c.id
+           ORDER BY created_at DESC, id DESC LIMIT 1
+         ) m ON true
+         ORDER BY c.updated_at DESC, c.created_at DESC`
+      );
 
-  if (userId !== undefined) {
-    return allConversations.filter((c) => c.user_id === userId);
-  }
-  return allConversations;
+  return Promise.all(rows.map(mapConversationWithMessages));
 }
 
-export function getConversationFromDb(
+export async function getConversationFromDb(
   id: string,
   userId?: number
-): Conversation | null {
-  const conv = conversationsMap.get(id);
-  if (!conv) return null;
-  if (userId !== undefined && conv.user_id !== userId) {
-    return null;
-  }
-  return conv;
+): Promise<Conversation | null> {
+  await ensureInitialized();
+  const { rows } = userId
+    ? await pool.query(
+        `SELECT * FROM conversations WHERE id = $1 AND user_id = $2`,
+        [id, userId]
+      )
+    : await pool.query(`SELECT * FROM conversations WHERE id = $1`, [id]);
+
+  if (rows.length === 0) return null;
+  return mapConversationWithMessages(rows[0]);
 }
 
-export function createConversationInDb(data: {
+export async function createConversationInDb(data: {
   user_id: number;
   title?: string;
   initialMessage?: string;
-}): Conversation {
+}): Promise<Conversation> {
+  await ensureInitialized();
   const convId = `conv-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-  const now = new Date().toISOString();
+  const now = new Date();
 
-  const messages: ChatMessage[] = [];
+  await pool.query(
+    `INSERT INTO conversations (id, user_id, title, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [convId, data.user_id, (data.title && data.title.trim()) || "Percakapan Baru", now, now]
+  );
+
   if (data.initialMessage && data.initialMessage.trim()) {
-    messages.push({
-      id: `msg-${nextMessageId++}`,
-      conversation_id: convId,
+    await addMessageToConversationInDb(convId, {
       role: "user",
       content: data.initialMessage.trim(),
-      created_at: now,
+      created_at: now.toISOString(),
     });
   }
 
-  const newConv: Conversation = {
-    id: convId,
-    user_id: data.user_id,
-    title: (data.title && data.title.trim()) || "Percakapan Baru",
-    created_at: now,
-    updated_at: now,
-    messages,
-    last_message: data.initialMessage || undefined,
-    message_count: messages.length,
-  };
-
-  conversationsMap.set(newConv.id, newConv);
-  return newConv;
+  return (await getConversationFromDb(convId)) as Conversation;
 }
 
-export function addMessageToConversationInDb(
+export async function addMessageToConversationInDb(
   conversationId: string,
   message: {
     role: "user" | "assistant" | "system";
     content: string;
     created_at?: string;
   }
-): ChatMessage | null {
-  const conv = conversationsMap.get(conversationId);
-  if (!conv) return null;
-
+): Promise<ChatMessage | null> {
+  await ensureInitialized();
   const now = message.created_at || new Date().toISOString();
-  const newMsg: ChatMessage = {
-    id: `msg-${nextMessageId++}`,
-    conversation_id: conversationId,
-    role: message.role,
-    content: message.content,
-    created_at: now,
-  };
 
-  conv.messages.push(newMsg);
-  conv.updated_at = now;
-  conv.last_message = message.content;
-  conv.message_count = conv.messages.length;
+  const { rows } = await pool.query(
+    `INSERT INTO messages (conversation_id, role, content, created_at)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, conversation_id, role, content, created_at`,
+    [conversationId, message.role, message.content, now]
+  );
 
-  return newMsg;
+  await pool.query(
+    `UPDATE conversations SET updated_at = $2 WHERE id = $1`,
+    [conversationId, now]
+  );
+
+  return mapMessageRow(rows[0]);
 }
 
-export function updateConversationTitleInDb(
+export async function updateConversationTitleInDb(
   id: string,
   title: string,
   userId?: number
-): Conversation | null {
-  const conv = conversationsMap.get(id);
-  if (!conv) return null;
-  if (userId !== undefined && conv.user_id !== userId) return null;
-
-  conv.title = title.trim();
-  conv.updated_at = new Date().toISOString();
-  return conv;
+): Promise<Conversation | null> {
+  await ensureInitialized();
+  const { rows } = await pool.query(
+    `UPDATE conversations SET title = $1, updated_at = NOW()
+     WHERE id = $2 ${userId !== undefined ? "AND user_id = $3" : ""}
+     RETURNING *`,
+    userId !== undefined ? [title.trim(), id, userId] : [title.trim(), id]
+  );
+  if (rows.length === 0) return null;
+  return mapConversationWithMessages(rows[0]);
 }
 
-export function deleteConversationFromDb(
+export async function deleteConversationFromDb(
   id: string,
   userId?: number
-): boolean {
-  const conv = conversationsMap.get(id);
-  if (!conv) return false;
-  if (userId !== undefined && conv.user_id !== userId) return false;
-
-  return conversationsMap.delete(id);
+): Promise<boolean> {
+  await ensureInitialized();
+  const { rowCount } = await pool.query(
+    `DELETE FROM conversations WHERE id = $1 ${userId !== undefined ? "AND user_id = $2" : ""}`,
+    userId !== undefined ? [id, userId] : [id]
+  );
+  return (rowCount ?? 0) > 0;
 }

@@ -34,14 +34,14 @@ export function verifyToken(token: string): { userId: number; email: string } | 
  * 1. Authorization: Bearer <token>
  * 2. x-user-id: <id> (developer test header fallback)
  */
-export function getAuthenticatedUser(request: Request): User | null {
+export async function getAuthenticatedUser(request: Request): Promise<User | null> {
   // 1. Check Authorization Bearer header
   const authHeader = request.headers.get("Authorization") || request.headers.get("authorization");
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.substring(7).trim();
     const payload = verifyToken(token);
     if (payload) {
-      const user = findUserById(payload.userId);
+      const user = await findUserById(payload.userId);
       if (user) {
         return {
           id: user.id,
@@ -58,7 +58,7 @@ export function getAuthenticatedUser(request: Request): User | null {
   if (userIdHeader) {
     const uid = parseInt(userIdHeader, 10);
     if (!isNaN(uid)) {
-      const user = findUserById(uid);
+      const user = await findUserById(uid);
       if (user) {
         return {
           id: user.id,

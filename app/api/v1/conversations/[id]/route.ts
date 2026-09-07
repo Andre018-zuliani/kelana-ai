@@ -10,7 +10,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json(
       { detail: "Not authenticated. Please log in." },
@@ -19,7 +19,7 @@ export async function GET(
   }
 
   const { id } = await params;
-  const conversation = getConversationFromDb(id, user.id);
+  const conversation = await getConversationFromDb(id, user.id);
 
   if (!conversation) {
     return NextResponse.json(
@@ -35,7 +35,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json(
       { detail: "Not authenticated. Please log in." },
@@ -53,7 +53,7 @@ export async function PATCH(
       );
     }
 
-    const updated = updateConversationTitleInDb(id, body.title.trim(), user.id);
+    const updated = await updateConversationTitleInDb(id, body.title.trim(), user.id);
     if (!updated) {
       return NextResponse.json(
         { detail: "Conversation not found or access denied." },
@@ -74,7 +74,7 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json(
       { detail: "Not authenticated. Please log in." },
@@ -83,7 +83,7 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const deleted = deleteConversationFromDb(id, user.id);
+  const deleted = await deleteConversationFromDb(id, user.id);
 
   if (!deleted) {
     return NextResponse.json(

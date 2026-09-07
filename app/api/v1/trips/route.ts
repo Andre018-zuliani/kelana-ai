@@ -10,7 +10,7 @@ import {
 import { getAuthenticatedUser } from "@/lib/auth";
 
 export async function GET(request: Request) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json(
       { detail: "Not authenticated. Please log in to view your trips." },
@@ -19,12 +19,12 @@ export async function GET(request: Request) {
   }
 
   // View: Only own trips - filter by user.id
-  const trips = listTripsFromDb(user.id);
+  const trips = await listTripsFromDb(user.id);
   return NextResponse.json(trips);
 }
 
 export async function POST(request: Request) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json(
       { detail: "Not authenticated. Please log in to create a trip." },
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     const daily_budget = calculateDailyBudget(budget, days);
     const category = getTripCategory(budget);
 
-    const trip = createTripInDb({
+    const trip = await createTripInDb({
       user_id: user.id,
       destination,
       days,

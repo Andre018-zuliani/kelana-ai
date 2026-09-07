@@ -16,11 +16,13 @@ class Trip(Base):
     __tablename__ = "trips"
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=True)
     destination = Column(String, nullable=False)
     days = Column(Integer, nullable=False)
     budget = Column(Float, nullable=False)
     category = Column(String, nullable=False)
     daily_budget = Column(Float, nullable=False)
+    travel_style = Column(String, nullable=True, default="standard")
 
     # Sesi 5 — menyimpan hasil rekomendasi AI dari Amazon Bedrock.
     # nullable=True karena trip lama (sebelum Sesi 5) belum punya nilai ini.

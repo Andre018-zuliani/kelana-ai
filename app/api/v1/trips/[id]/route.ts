@@ -14,7 +14,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json(
       { detail: "Not authenticated" },
@@ -24,7 +24,7 @@ export async function GET(
 
   const { id } = await params;
   const tripId = Number(id);
-  const trip = getTripFromDb(tripId);
+  const trip = await getTripFromDb(tripId);
 
   if (!trip) {
     return NextResponse.json(
@@ -48,7 +48,7 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json(
       { detail: "Not authenticated" },
@@ -58,7 +58,7 @@ export async function PUT(
 
   const { id } = await params;
   const tripId = Number(id);
-  const existing = getTripFromDb(tripId);
+  const existing = await getTripFromDb(tripId);
 
   if (!existing) {
     return NextResponse.json(
@@ -85,7 +85,7 @@ export async function PUT(
     const daily_budget = calculateDailyBudget(budget, days);
     const category = getTripCategory(budget);
 
-    const updated = updateTripInDb(tripId, {
+    const updated = await updateTripInDb(tripId, {
       destination,
       days,
       budget,
@@ -107,7 +107,7 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json(
       { detail: "Not authenticated" },
@@ -117,7 +117,7 @@ export async function DELETE(
 
   const { id } = await params;
   const tripId = Number(id);
-  const existing = getTripFromDb(tripId);
+  const existing = await getTripFromDb(tripId);
 
   if (!existing) {
     return NextResponse.json(
@@ -134,7 +134,7 @@ export async function DELETE(
     );
   }
 
-  const success = deleteTripFromDb(tripId);
+  const success = await deleteTripFromDb(tripId);
   if (!success) {
     return NextResponse.json(
       { detail: `Trip with id ${id} not found` },

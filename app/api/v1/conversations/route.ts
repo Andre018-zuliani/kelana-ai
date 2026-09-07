@@ -7,7 +7,7 @@ import {
 import { generateSuggestedTitle } from "@/lib/chat_service";
 
 export async function GET(request: Request) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json(
       { detail: "Not authenticated. Please log in." },
@@ -15,12 +15,12 @@ export async function GET(request: Request) {
     );
   }
 
-  const conversations = listConversationsFromDb(user.id);
+  const conversations = await listConversationsFromDb(user.id);
   return NextResponse.json(conversations);
 }
 
 export async function POST(request: Request) {
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request);
   if (!user) {
     return NextResponse.json(
       { detail: "Not authenticated. Please log in." },
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       title = generateSuggestedTitle(initialMessage);
     }
 
-    const conversation = createConversationInDb({
+    const conversation = await createConversationInDb({
       user_id: user.id,
       title: title || "Percakapan Baru",
       initialMessage,
