@@ -43,7 +43,17 @@ Tugas Anda:
     });
   }
 
-  // 3. Attempt calling Gemini API
+    // 3. Attempt calling Amazon Bedrock (Converse API, bearer token auth)
+  const bedrockReply = await generateBedrockChatReply(
+    conversationMessages,
+    latestUserPrompt,
+    systemInstruction
+  );
+  if (bedrockReply) {
+    return bedrockReply;
+  }
+
+  // 4. Attempt calling Gemini API (optional fallback)
   if (process.env.GEMINI_API_KEY) {
     try {
       const ai = new GoogleGenAI({
@@ -72,8 +82,89 @@ Tugas Anda:
     }
   }
 
-  // 4. Intelligent Context-Aware Fallback (Demonstrating Conversational Memory)
+  // 5. Intelligent Context-Aware Fallback (Demonstrating Conversational Memory)
   return generateContextualFallback(conversationMessages, latestUserPrompt, relevantChunks);
+}
+
+interface BedrockConverseMessage {
+  role: "user" | "assistant";
+  content: Array<{ text: string }>;
+}
+
+/**
+ * Calls the Amazon Bedrock Converse REST API using a Bedrock API key
+ * (bearer token) — no AWS IAM / sigv4 signing required.
+ *
+ * Relies on env vars:
+ *   AWS_BEARER_TOKEN - the Bedrock API key (ABSK...)
+ *   AWS_REGION       - e.g. us-east-1
+ *   MODEL_ID         - e.g. amazon.nova-lite-v1:0
+ */
+async function generateBedrockChatReply(
+  history: ChatMessage[],
+  latestUserPrompt: string,
+  systemInstruction: string
+): Promise<string | null> {
+  const bearerToken = process.env.AWS_BEARER_TOKEN;
+  if (!bearerToken) return null;
+
+  const region = process.env.AWS_REGION || "us-east-1";
+  const modelId = process.env.MODEL_ID || "amazon.nova-lite-v1:0";
+
+  try {
+    // Build Bedrock Converse multi-turn format:
+    //   [{ role: "user"|"assistant", content: [{ text }] }]
+    const messages: BedrockConverseMessage[] = history
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: [{ text: m.content }],
+      }));
+
+    // Ensure the latest user prompt is included
+    const lastMsg = history[history.length - 1];
+    if (!lastMsg || lastMsg.role !== "user" || lastMsg.content !== latestUserPrompt) {
+      messages.push({
+        role: "user",
+        content: [{ text: latestUserPrompt }],
+      });
+    }
+
+    const url = `https://bedrock-runtime.${region}.amazonaws.com/model/${encodeURIComponent(
+      modelId
+    )}/converse`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${bearerToken}`,
+      },
+      body: JSON.stringify({
+        modelId,
+        messages,
+        system: [{ text: systemInstruction }],
+        inferenceConfig: { temperature: 0.7 },
+      }),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error(`Bedrock Converse error ${res.status}: ${errBody.slice(0, 300)}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const text = data?.output?.message?.content?.[0]?.text;
+    if (text && text.trim()) {
+      return text.trim();
+    }
+    console.error("Bedrock Converse returned empty text:", JSON.stringify(data).slice(0, 300));
+    return null;
+  } catch (err) {
+    console.error("Bedrock Converse request error:", err);
+    return null;
+  }
 }
 
 function generateContextualFallback(

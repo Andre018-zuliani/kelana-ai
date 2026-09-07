@@ -4,4 +4,7 @@ __pycache__/
 node_modules/
 .next/
 bun.lock
+next-env.d.ts
+tsconfig.tsbuildinfo
+backend/__pycache__/
 
